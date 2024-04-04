@@ -63,6 +63,8 @@ class SlidingUpPanel extends StatefulWidget {
   /// The height of the sliding panel when fully open.
   final double maxHeight;
 
+  final double? touchableHeight;
+  
   /// A point between [minHeight] and [maxHeight] that the panel snaps to
   /// while animating. A fast swipe on the panel will disregard this point
   /// and go directly to the open/close position. This value is represented as a
@@ -167,6 +169,7 @@ class SlidingUpPanel extends StatefulWidget {
       this.collapsed,
       this.minHeight = 100.0,
       this.maxHeight = 500.0,
+      this.touchableHeight,  
       this.snapPoint,
       this.border,
       this.borderRadius,
@@ -211,6 +214,7 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
   late ScrollController _sc;
 
   bool _scrollingEnabled = false;
+  bool _inScrolling = false;
   VelocityTracker _vt = new VelocityTracker.withKind(PointerDeviceKind.touch);
 
   bool _isPanelVisible = true;
@@ -444,6 +448,9 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
     if (widget.panel != null) {
       return GestureDetector(
+        onVerticalDragDown: (DragDownDetails dets) {
+          _inScrolling = dets.localPosition.dy < (widget.touchableHeight ?? double.maxFinite);
+        },
         onVerticalDragUpdate: (DragUpdateDetails dets) =>
             _onGestureSlide(dets.delta.dy),
         onVerticalDragEnd: (DragEndDetails dets) =>
@@ -453,8 +460,10 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
     }
 
     return Listener(
-      onPointerDown: (PointerDownEvent p) =>
-          _vt.addPosition(p.timeStamp, p.position),
+      onPointerDown: (PointerDownEvent p) {
+        _inScrolling = p.localPosition.dy < (widget.touchableHeight ?? double.maxFinite);
+        _vt.addPosition(p.timeStamp, p.position);
+      },
       onPointerMove: (PointerMoveEvent p) {
         _vt.addPosition(p.timeStamp,
             p.position); // add current position for velocity tracking
@@ -467,6 +476,8 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   // handles the sliding gesture
   void _onGestureSlide(double dy) {
+    if (!_inScrolling) return;
+    
     // only slide the panel if scrolling is not enabled
     if (!_scrollingEnabled) {
       if (widget.slideDirection == SlideDirection.UP)
@@ -491,9 +502,12 @@ class _SlidingUpPanelState extends State<SlidingUpPanel>
 
   // handles when user stops sliding
   void _onGestureEnd(Velocity v) {
+    if (!_inScrolling) return;
+    _inScrolling = false;
+
     double minFlingVelocity = 365.0;
     double kSnap = 8;
-
+    
     //let the current animation finish before starting a new one
     if (_ac.isAnimating) return;
 
